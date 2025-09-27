@@ -2,6 +2,8 @@ from airflow import DAG
 from airflow.decorators import task
 from datetime import datetime, timedelta
 import json
+import gzip
+import io
 
 LOCATIONS = [
     {"lat": "54.6778816", "lon": "-5.9249199"},
@@ -38,9 +40,43 @@ with DAG('openweather_to_gcs', default_args=default_args, schedule_interval='@da
         from google.cloud import storage
         client = storage.Client()
         bucket = client.bucket(gcs_bucket)
-        path = f"openweather/{execution_date}/weather_{execution_date}.json"
+
+        # Build NDJSON payload (raw/bronze): minimal metadata + full payload
+        lines = []
+        ingestion_ts = datetime.utcnow().isoformat()
+        for key, payload in data.items():
+            if not isinstance(payload, dict):
+                continue
+            coord = payload.get('coord') or {}
+            record = {
+                'ingestion_ts': ingestion_ts,
+                'source': 'openweather',
+                'event_ts': payload.get('dt'),
+                'location': {
+                    'id': payload.get('id'),
+                    'name': payload.get('name'),
+                    'lat': coord.get('lat'),
+                    'lon': coord.get('lon'),
+                    'key': key,
+                },
+                'payload': payload,
+            }
+            lines.append(json.dumps(record, separators=(',', ':')))
+
+        ndjson = "\n".join(lines) + ("\n" if lines else "")
+
+        # Gzip-compress
+        buffer = io.BytesIO()
+        with gzip.GzipFile(fileobj=buffer, mode='wb') as gz:
+            gz.write(ndjson.encode('utf-8'))
+        content = buffer.getvalue()
+
+        # Partition by date, write jsonl.gz
+        safe_ts = ingestion_ts.replace('-', '').replace(':', '').split('.', 1)[0]
+        path = f"openweather/dt={execution_date}/batch_ts={safe_ts}/part-0000.jsonl.gz"
         blob = bucket.blob(path)
-        blob.upload_from_string(json.dumps(data), content_type='application/json')
+        blob.content_encoding = 'gzip'
+        blob.upload_from_string(content, content_type='application/json')
         return path
 
     api_key = '{{ conn.openweather.login if conn.openweather else "" }}'
@@ -51,3 +87,9 @@ with DAG('openweather_to_gcs', default_args=default_args, schedule_interval='@da
     gcs_path = upload_to_gcs(data=data, gcs_bucket=gcs_bucket, execution_date=execution_date)
 
 
+"""
+NDJSON vs JSON: NDJSON is preferred for raw lake dumps. It’s append‑friendly, streamable, 
+resilient to partial writes, and Snowflake ingests it line‑by‑line cleanly.
+
+
+"""

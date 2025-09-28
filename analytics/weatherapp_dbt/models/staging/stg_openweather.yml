@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: stg_openweather
+    description: Parsed and typed staging view over RAW.RAW_OPENWEATHER JSON.
+    materialized: view
+    columns:
+      - name: location_id
+        tests: [not_null]
+      - name: event_date
+        tests: [not_null]

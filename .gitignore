@@ -1,4 +1,9 @@
 keys/
+logs/
+infra/snowflake/.terraform/
+infra/snowflake/terraform.tfstate
+infra/snowflake/terraform.tfstate.backup
+infra/snowflake/terraform.tfvars
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

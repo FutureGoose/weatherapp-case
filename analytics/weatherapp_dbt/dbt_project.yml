@@ -1,0 +1,17 @@
+name: weatherapp_dbt
+version: 1.0.0
+config-version: 2
+profile: weatherapp
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+
+models:
+  weatherapp_dbt:
+    staging:
+      materialized: view
+    marts:
+      materialized: table

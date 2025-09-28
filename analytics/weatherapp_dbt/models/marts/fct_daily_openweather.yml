@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: fct_daily_openweather
+    description: Latest weather snapshot per location per UTC calendar day.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - location_id
+            - event_date
+    columns:
+      - name: location_id
+        tests:
+          - not_null
+      - name: event_date
+        tests:
+          - not_null
+

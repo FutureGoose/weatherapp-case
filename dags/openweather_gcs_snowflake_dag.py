@@ -1,7 +1,8 @@
 from airflow import DAG
 from airflow.decorators import task
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
-from datetime import datetime, timedelta
+import pendulum
+from datetime import timedelta
 import json
 import gzip
 import io
@@ -18,12 +19,17 @@ LOCATIONS = [
 
 default_args = {
     'owner': 'airflow',
-    'start_date': datetime(2025, 9, 27),
+    'start_date': pendulum.datetime(2025, 9, 27, tz='UTC'),
     'retries': 1,
     'retry_delay': timedelta(minutes=1),
 }
 
-with DAG('openweather_to_gcs', default_args=default_args, schedule_interval='@daily', catchup=False) as dag:
+with DAG(
+    'openweather_gcs_snowflake_dag',
+    default_args=default_args,
+    schedule_interval='0 6 * * *',
+    catchup=False,
+) as dag:
 
     @task
     def fetch_weather(api_key: str, execution_date: str) -> dict:
@@ -42,9 +48,9 @@ with DAG('openweather_to_gcs', default_args=default_args, schedule_interval='@da
         client = storage.Client()
         bucket = client.bucket(gcs_bucket)
 
-        # Build NDJSON payload (raw/bronze): minimal metadata + full payload
+        # build NDJSON payload: minimal metadata + full payload
         lines = []
-        ingestion_ts = datetime.utcnow().isoformat()
+        ingestion_ts = pendulum.now('UTC').isoformat()
         for key, payload in data.items():
             if not isinstance(payload, dict):
                 continue
@@ -66,13 +72,13 @@ with DAG('openweather_to_gcs', default_args=default_args, schedule_interval='@da
 
         ndjson = "\n".join(lines) + ("\n" if lines else "")
 
-        # Gzip-compress
+        # gzip-compress
         buffer = io.BytesIO()
         with gzip.GzipFile(fileobj=buffer, mode='wb') as gz:
             gz.write(ndjson.encode('utf-8'))
         content = buffer.getvalue()
 
-        # Partition by date, write jsonl.gz
+        # partition by date, write jsonl.gz
         safe_ts = ingestion_ts.replace('-', '').replace(':', '').split('.', 1)[0]
         path = f"openweather/dt={execution_date}/batch_ts={safe_ts}/part-0000.jsonl.gz"
         blob = bucket.blob(path)
@@ -84,8 +90,8 @@ with DAG('openweather_to_gcs', default_args=default_args, schedule_interval='@da
     gcs_bucket = '{{ var.value.openweather_gcs_bucket }}'
     execution_date = '{{ ds }}'
 
-    data = fetch_weather(api_key=api_key, execution_date=execution_date)
-    gcs_path = upload_to_gcs(data=data, gcs_bucket=gcs_bucket, execution_date=execution_date)
+    fetch_task = fetch_weather(api_key=api_key, execution_date=execution_date)
+    upload_task = upload_to_gcs(data=fetch_task, gcs_bucket=gcs_bucket, execution_date=execution_date)
 
     load_to_snowflake = SnowflakeOperator(
         task_id='load_to_snowflake',
@@ -94,18 +100,11 @@ with DAG('openweather_to_gcs', default_args=default_args, schedule_interval='@da
             """
             COPY INTO WEATHER.RAW.RAW_OPENWEATHER
               FROM @WEATHER.RAW.STG_OPENWEATHER
-              PATTERN='dt={{ ds }}/batch_ts=.*/part-\\d+\\.jsonl(\\.gz)?'
+              PATTERN='.*\\.jsonl(\\.gz)?$'  -- matches .jsonl or .jsonl.gz
               FILE_FORMAT=(FORMAT_NAME=WEATHER.RAW.FF_OPENWEATHER_JSONL)
-              ON_ERROR='CONTINUE';
+              ON_ERROR='ABORT_STATEMENT'     -- no partial loads
+              FORCE=FALSE;                   -- only ingest new
             """
         ),
     )
-
-    gcs_path >> load_to_snowflake
-
-
-"""
-NDJSON vs JSON: NDJSON is preferred for raw lake dumps. It’s append‑friendly, streamable, 
-resilient to partial writes, and Snowflake ingests it line‑by‑line cleanly.
-
-"""
+    fetch_task >> upload_task >> load_to_snowflake

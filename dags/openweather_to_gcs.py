@@ -1,5 +1,6 @@
 from airflow import DAG
 from airflow.decorators import task
+from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from datetime import datetime, timedelta
 import json
 import gzip
@@ -86,10 +87,25 @@ with DAG('openweather_to_gcs', default_args=default_args, schedule_interval='@da
     data = fetch_weather(api_key=api_key, execution_date=execution_date)
     gcs_path = upload_to_gcs(data=data, gcs_bucket=gcs_bucket, execution_date=execution_date)
 
+    load_to_snowflake = SnowflakeOperator(
+        task_id='load_to_snowflake',
+        snowflake_conn_id='snowflake_conn',
+        sql=(
+            """
+            COPY INTO WEATHER.RAW.RAW_OPENWEATHER
+              FROM @WEATHER.RAW.STG_OPENWEATHER
+              PATTERN='dt={{ ds }}/batch_ts=.*/part-\\d+\\.jsonl(\\.gz)?'
+              FILE_FORMAT=(FORMAT_NAME=WEATHER.RAW.FF_OPENWEATHER_JSONL)
+              ON_ERROR='CONTINUE';
+            """
+        ),
+    )
+
+    gcs_path >> load_to_snowflake
+
 
 """
 NDJSON vs JSON: NDJSON is preferred for raw lake dumps. It’s append‑friendly, streamable, 
 resilient to partial writes, and Snowflake ingests it line‑by‑line cleanly.
-
 
 """

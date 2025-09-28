@@ -1,7 +1,6 @@
 # copy to terraform.tfvars and fill values, or set via TF_VAR_* env vars
 snowflake_account   = "IFNTRPR-AK19625"
 snowflake_user      = "GOOSE"
-snowflake_password  = env("SNOWFLAKE_PASSWORD")
 snowflake_role      = "ACCOUNTADMIN"
 snowflake_warehouse = "COMPUTE_WH"
 

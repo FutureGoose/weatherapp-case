@@ -37,7 +37,7 @@ with DAG(
         results = {}
         for i, loc in enumerate(LOCATIONS):
             params = { 'lat': loc['lat'], 'lon': loc['lon'], 'appid': api_key }
-            resp = requests.get('https://api.openweathermap.org/data/2.5/weather', params=params)
+            resp = requests.get('https://api.openweathermap.org/data/2.5/weather', params=params, timeout=(5, 20))
             resp.raise_for_status()
             results[f'loc_{i}'] = resp.json()
         return results

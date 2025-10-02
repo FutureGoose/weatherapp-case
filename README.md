@@ -78,13 +78,13 @@ docker compose exec airflow-webserver airflow connections get snowflake_conn
 7) Run the pipeline
 The DAG fetches current weather for configured locations, writes NDJSON to `gs://openweathermap_data/openweather/dt=YYYY-MM-DD/batch_ts=.../part-0000.jsonl.gz`, then loads the same day’s files into `WEATHER.RAW.RAW_OPENWEATHER` in Snowflake.
 ```bash
-docker compose exec airflow-webserver airflow dags trigger openweather_to_gcs
+docker compose exec airflow-webserver airflow dags trigger openweather_gcs_snowflake_dag
 ```
 
 8) Run dbt dedup (curated models)
 - See `analytics/weatherapp_dbt/README.md` for full instructions. Minimal:
 ```bash
-export SNOWFLAKE_PASSWORD='<YOUR_SNOWFLAKE_PASSWORD>'
+export DBT_SNOWFLAKE_PASSWORD='<YOUR_SNOWFLAKE_PASSWORD>'
 source .venv/bin/activate
 cd analytics/weatherapp_dbt
 dbt run -s +fct_daily_openweather

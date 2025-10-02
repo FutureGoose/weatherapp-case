@@ -9,7 +9,7 @@ locals {
   integ_name  = "GCS_INT"
   gcs_url     = "gcs://openweathermap_data/openweather/"
 }
-
+#        type                 label
 resource "snowflake_database" "weather" {
   name = local.db_name
 }
@@ -40,7 +40,7 @@ resource "snowflake_file_format" "jsonl" {
   skip_byte_order_mark = true
 }
 
-# storage integration (requires ACCOUNTADMIN). Update 'storage_allowed_locations' as needed.
+# storage integration (requires ACCOUNTADMIN)
 resource "snowflake_storage_integration" "gcs" {
   name                      = local.integ_name
   storage_provider          = "GCS"

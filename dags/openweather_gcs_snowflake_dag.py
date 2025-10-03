@@ -78,6 +78,9 @@ with DAG(
             gz.write(ndjson.encode('utf-8'))
         content = buffer.getvalue()
 
+        # simple version
+        # content = gzip.compress(ndjson.encode('utf-8'))
+
         # partition by date, write jsonl.gz
         safe_ts = ingestion_ts.replace('-', '').replace(':', '').split('.', 1)[0]
         path = f"openweather/dt={execution_date}/batch_ts={safe_ts}/part-0000.jsonl.gz"

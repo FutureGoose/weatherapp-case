@@ -72,7 +72,7 @@ with DAG(
 
         ndjson = "\n".join(lines) + ("\n" if lines else "")
 
-        # gzip-compress
+        # gzip-compress, for future stream-based chunking
         buffer = io.BytesIO()
         with gzip.GzipFile(fileobj=buffer, mode='wb') as gz:
             gz.write(ndjson.encode('utf-8'))

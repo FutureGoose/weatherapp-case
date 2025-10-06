@@ -24,9 +24,8 @@ default_args = {
     "retry_delay": timedelta(minutes=2),
 }
 
-# GCS bucket from Airflow Variables; batch folder is templated per run.
+
 GCS_BUCKET = "{{ var.value.openweather_gcs_bucket }}"
-# Example: openweather/dt=2025-10-06/batch_ts=20251006T0612
 PARTITION_PREFIX = "openweather/dt={{ ds }}/batch_ts={{ ts_nodash[:15] }}"
 
 # ---------------- Tasks ----------------
@@ -39,7 +38,7 @@ def extract_to_gcs(api_key: str, bucket_name: str, prefix: str, **_):
     bucket = client.bucket(bucket_name)
 
     # streaming writer (bounded memory; easy to scale if LOCATIONS grows a lot)
-    max_records_per_part = 2  # safe for future growth; with 7 records you'll just get part-0000
+    max_records_per_part = 2  # 50_000
     part_idx = 0
     count_in_part = 0
     buf = io.BytesIO()
@@ -48,7 +47,7 @@ def extract_to_gcs(api_key: str, bucket_name: str, prefix: str, **_):
     def flush_part():
         nonlocal buf, gz, part_idx, count_in_part
         gz.close()
-        data = buf.getvalue()  # compressed bytes
+        data = buf.getvalue()
         object_name = f"{prefix}/part-{part_idx:04d}.jsonl.gz"
         blob = bucket.blob(object_name)
         blob.content_encoding = "gzip"
@@ -97,7 +96,7 @@ def extract_to_gcs(api_key: str, bucket_name: str, prefix: str, **_):
     bucket.blob(f"{prefix}/_SUCCESS").upload_from_string(b"", content_type="text/plain")
 
     prefix_for_snowflake = prefix.replace("openweather/", "")
-    return prefix_for_snowflake  # tiny string → XCom
+    return prefix_for_snowflake  # tiny string -> XCom
 
 with DAG(
     "openweather_gcs_snowflake_chunked",
@@ -138,4 +137,4 @@ with DAG(
         """,
     )
 
-    extract >> list_batch >> load_to_snowflake
+    extract >> load_to_snowflake

@@ -27,7 +27,7 @@ default_args = {
 # GCS bucket from Airflow Variables; batch folder is templated per run.
 GCS_BUCKET = "{{ var.value.openweather_gcs_bucket }}"
 # Example: openweather/dt=2025-10-06/batch_ts=20251006T0612
-PARTITION_PREFIX = "dt={{ ds }}/batch_ts={{ ts_nodash[:15] }}"
+PARTITION_PREFIX = "openweather/dt={{ ds }}/batch_ts={{ ts_nodash[:15] }}"
 
 # ---------------- Tasks ----------------
 def extract_to_gcs(api_key: str, bucket_name: str, prefix: str, **_):
@@ -96,7 +96,8 @@ def extract_to_gcs(api_key: str, bucket_name: str, prefix: str, **_):
     # optional marker to signal "batch complete"
     bucket.blob(f"{prefix}/_SUCCESS").upload_from_string(b"", content_type="text/plain")
 
-    return prefix  # tiny string → XCom
+    prefix_for_snowflake = prefix.replace("openweather/", "")
+    return prefix_for_snowflake  # tiny string → XCom
 
 with DAG(
     "openweather_gcs_snowflake_chunked",
@@ -112,7 +113,7 @@ with DAG(
         op_kwargs={
             "api_key": api_key,
             "bucket_name": GCS_BUCKET,
-            "prefix": PARTITION_PREFIX,  # templated per run (date + batch_ts)
+            "prefix": PARTITION_PREFIX,
         },
     )
 
@@ -129,7 +130,7 @@ with DAG(
         snowflake_conn_id="snowflake_conn",
         sql="""
         COPY INTO WEATHER.RAW.RAW_OPENWEATHER
-          FROM @WEATHER.RAW.STG_OPENWEATHER/{{ ti.xcom_pull(task_ids='extract_to_gcs') }}
+          FROM @WEATHER.RAW.STG_OPENWEATHER/{{ ti.xcom_pull(task_ids='extract_to_gcs') }}/
           PATTERN='.*\\.jsonl(\\.gz)?$'
           FILE_FORMAT=(FORMAT_NAME=WEATHER.RAW.FF_OPENWEATHER_JSONL)
           ON_ERROR='ABORT_STATEMENT'
@@ -137,4 +138,4 @@ with DAG(
         """,
     )
 
-    extract >> load_to_snowflake
+    extract >> list_batch >> load_to_snowflake

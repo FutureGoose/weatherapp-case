@@ -3,6 +3,10 @@ version: 2
 models:
   - name: fct_daily_openweather
     description: Latest weather snapshot per location per UTC calendar day.
+    config:
+      materialized: table
+      tags:
+        - weather
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns:

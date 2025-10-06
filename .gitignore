@@ -1,5 +1,5 @@
-keys/
-logs/
+**/keys/
+**/logs/
 infra/snowflake/.terraform/
 infra/snowflake/terraform.tfstate
 infra/snowflake/terraform.tfstate.backup

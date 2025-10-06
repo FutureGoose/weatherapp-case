@@ -73,13 +73,13 @@ with DAG(
         ndjson = "\n".join(lines) + ("\n" if lines else "")
 
         # gzip-compress, for future stream-based chunking
-        buffer = io.BytesIO()
-        with gzip.GzipFile(fileobj=buffer, mode='wb') as gz:
-            gz.write(ndjson.encode('utf-8'))
-        content = buffer.getvalue()
+        # buffer = io.BytesIO()
+        # with gzip.GzipFile(fileobj=buffer, mode='wb') as gz:
+        #     gz.write(ndjson.encode('utf-8'))
+        # content = buffer.getvalue()
 
         # simple version
-        # content = gzip.compress(ndjson.encode('utf-8'))
+        content = gzip.compress(ndjson.encode('utf-8'))
 
         # partition by date, write jsonl.gz
         safe_ts = ingestion_ts.replace('-', '').replace(':', '').split('.', 1)[0]

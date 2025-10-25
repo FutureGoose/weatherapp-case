@@ -56,6 +56,7 @@ def extract_to_gcs(api_key: str, bucket_name: str, prefix: str, **_):
         count_in_part = 0
         buf = io.BytesIO()
         gz = gzip.GzipFile(fileobj=buf, mode="wb")
+        # close the buffer, not manually, with open
 
     # build & write records one-by-one
     ingestion_ts = pendulum.now("UTC").isoformat()

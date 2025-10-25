@@ -1,0 +1,4 @@
+- chunked airflow dag
+- schedule job daily dbt build using Docker- or BashOperator....or other way
+- backfill logic to dag with execution_date param
+- try different load than copy into and compare performance
